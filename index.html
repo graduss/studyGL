@@ -2,6 +2,18 @@
 <html>
     <head>
         <title>study GL</title>
+        <script id="shader-fs" type="x-shader/x-fragment">
+            //precision mediump float;            
+            void main(void){
+                gl_FragColor = vec4(0.0,1.0,0.0,1.0);
+            }
+        </script>
+        <script id="shader-vs" type="x-shader/x-vertex">
+            void main(void) {
+                //gl_Position = gl_ModelViewProjectionMatrix * gl_Vertex;
+                gl_Position = gl_Vertex;
+            }
+        </script>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <link rel="stylesheet" type="text/css" href="css/main.css" />
