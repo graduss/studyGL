@@ -5,12 +5,23 @@ function GL(canvas) {
         try{
             this.gl = canvas.getContext('webgl');
             console.log("WebGl been initialized.");
+            this.gl.enable(this.gl.DEPTH_TEST);
         }catch (e){
             console.error('Your brawser con\'t WebGL.');
         }
     }
     
-    this.initSaderProgram = function(){
+    this.initShaderProgram = function(){
+        var sProgram  = new GL.ShaderProgram({
+            vertex: "shaders/simplest.vsh",
+            fragment: "shaders/simplest.fsh",
+            gl: this.gl
+        });
+        
+        sProgram.initProgram();
+    };
+    
+    /*this.initSaderProgram = function(){
         var shader_fs = this.getShader("shader-fs");
         var shader_vs = this.getShader("shader-vs");
 
@@ -61,19 +72,104 @@ function GL(canvas) {
         }
 
         return shader;
-    };
+    };*/
     
     this.renderScene = function(){
         this.gl.clearColor(0.0, 0.0, 1.0, 1.0);
-        this.gl.clear(this.gl.COLOR_BUFFER_BIT)
+        this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
     };
     
     __init.call(this,canvas);
 }
 
+GL.ShaderProgram = function ShaderProgram(conf){
+    this.VERTEX = 0;
+    this.FRAGMENT = 1;
+    
+    var urls = {};
+    urls[this.VERTEX] = conf.vertex || null;
+    urls[this.FRAGMENT] = conf.fragment || null;
+    
+    var gl = conf.gl || null;
+    
+    this.shaders = {};
+    
+    this.getSader = function(type, collback){
+        load(type, GL.bind(function(soursCode){
+            var shader = null;
+            if (type === this.VERTEX) {
+                shader = gl.createShader(gl.VERTEX_SHADER);
+            }else if (type === this.FRAGMENT) {
+                shader = gl.createShader(gl.FRAGMENT_SHADER);
+            }
+            
+            gl.shaderSource(shader,soursCode);
+            gl.compileShader(shader);
+            
+            if (gl.getShaderParameter(shader, gl.COMPILE_STATUS) !== true) {
+                console.error(gl.getShaderInfoLog(shader));
+                return null;
+            }
+            
+            this.shaders[type] = shader;
+            shader = null;
+            if (typeof collback === "function") collback(this.shaders[type]);
+        },this));
+    };
+    
+    this.initProgram = function(collback){
+        if (!(this.shaders[this.VERTEX] && this.shaders[this.FRAGMENT])){
+            getSaders.call(this,GL.bind(function(){
+                console.log(this);
+                this.initProgram(collback);
+            },this));
+            return;
+        }
+    };
+    
+    var getSaders = function(collback){
+        if(!this.shaders[this.VERTEX]) {
+            this.getSader(this.VERTEX,GL.bind(function(){
+                if(this.shaders[this.FRAGMENT]) collback();
+            },this));
+        }
+        
+        if (!this.shaders[this.FRAGMENT]) {
+            this.getSader(this.FRAGMENT,GL.bind(function(){
+                if(this.shaders[this.VERTEX]) collback();
+            },this));
+        }
+    };
+    
+    var load = function(shader,collback){
+        if(urls[shader] === null) {
+            console.error("Url shader is undefaind");
+        };
+
+        var xhr = new XMLHttpRequest();
+        xhr.open("get", urls[shader]);
+
+        xhr.onreadystatechange = function(){
+            if (this.readyState === 4){
+                if (this.status === 200){
+                    collback(this.responseText,this);
+                }else{
+                    console.error("Shader load ERROR");
+                }
+            }
+        };
+
+        xhr.send();
+    };
+};
+
+GL.bind = function(fn,obj){
+    return function(){ fn.apply(obj,arguments); };
+};
+
 window.onload = function(){
     var c = document.getElementById('gl');
     gl = new GL(c);
-    
+    gl.initShaderProgram();
     //gl.renderScene();
 };
