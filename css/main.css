@@ -22,7 +22,7 @@ div.cont h1{
 
 div.cont canvas {
     margin: 50px;
-    height: 400px;
-    width: 848px;
+    /*height: 400px;
+    width: 848px;*/
     border: 1px solid #a5a5a5;
 }

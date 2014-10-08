@@ -1,6 +1,8 @@
 function GL(canvas) {
     this.gl;
     this.shaderProgram = null;
+    this.buffers = {};
+    
     function __init(canvas){
         try{
             this.gl = canvas.getContext('webgl');
@@ -9,74 +11,97 @@ function GL(canvas) {
         }catch (e){
             console.error('Your brawser con\'t WebGL.');
         }
+        
+        this.gl.clearColor(0.7, 0.7, 0.7, 1.0);
+        this.gl.enable(this.gl.DEPTH_TEST);
+        
+        initBuffers.call(this);
+        
+        this.shaderProgram = this.initShaderProgram(GL.bind(function(shaderProgram){
+            attachAtributes.call(this,shaderProgram);
+            shaderProgram.useProgram();
+        },this));
+        
+        this.updateSize(400,400);
+        this.gl.viewport(10,10,this.gl.drawingBufferWidth-20, this.gl.drawingBufferHeight-20);
     }
     
-    this.initShaderProgram = function(){
+    this.initShaderProgram = function(collback){
         var sProgram  = new GL.ShaderProgram({
             vertex: "shaders/simplest.vsh",
             fragment: "shaders/simplest.fsh",
             gl: this.gl
         });
         
+        if (typeof collback === "function") {
+            sProgram.onInit = collback;
+        }
         sProgram.initProgram();
+        
+        return sProgram;
     };
     
-    /*this.initSaderProgram = function(){
-        var shader_fs = this.getShader("shader-fs");
-        var shader_vs = this.getShader("shader-vs");
-
-        var shaderProgram = this.gl.createProgram();
-        this.gl.attachShader(shaderProgram, shader_vs);
-        this.gl.attachShader(shaderProgram, shader_fs);
-        this.gl.linkProgram(shaderProgram);
-
-        if (this.gl.getProgramParameter(shaderProgram, this.gl.LINK_STATUS) !== true) {
-            console.error("Could not initialise shaders");
-        }
-
-        this.gl.useProgram(shaderProgram);
-
-        this.shaderProgram = shaderProgram;
+    var initBuffers = function(){
+        this.buffers.vertex = new GL.ArrayBuffer(this.gl, {
+            numItems  : 3,
+            itemSize : 3,
+            list: [
+                -1.0, -1.0, 0.0,
+                1.0, -1.0, 0.0,
+                0.0, 1.0, 0.0
+            ]
+        });
+        
+        this.buffers.color = new GL.ArrayBuffer(this.gl, {
+            numItems: 3,
+            itemSize: 4,
+            list: [
+                1.0, 0.0, 0.0, 1.0,
+                0.0, 1.0, 0.0, 1.0,
+                0.0, 0.0, 1.0, 1.0
+            ]
+        });
+        
+        this.buffers.normal = new GL.ArrayBuffer(this.gl, {
+            numItems: 3,
+            itemSize: 3 ,
+            list: [
+                0.0, 0.0, 4.0,
+                0.0, 0.0, 4.0,
+                0.0, 0.0, 4.0
+            ]
+        });
+        
+        this.buffers.index = new GL.ElementBuffer(this.gl,{
+            numItems  : 3,
+            itemSize : 1,
+            list: [
+                0, 1, 2
+            ]
+        });
     };
     
-    this.getShader = function(id){
-        var shaderScript = document.getElementById(id);
-        if (shaderScript === null) return null;
-
-        var str = '';
-        var tn = shaderScript.firstChild;
-        while (tn) {
-            if (tn.nodeType === document.TEXT_NODE) {
-                str += tn.textContent;
-            }
-
-            tn = tn.nextSibling;
-        }
-
-        var shader = null;
-        if (shaderScript.type === 'x-shader/x-fragment'){
-            shader = this.gl.createShader(this.gl.FRAGMENT_SHADER);
-
-        }else if (shaderScript.type === 'x-shader/x-vertex') {
-            shader = this.gl.createShader(this.gl.VERTEX_SHADER);
-
-        }else return null;
-
-
-        this.gl.shaderSource(shader,str);
-        this.gl.compileShader(shader);
-
-        if (this.gl.getShaderParameter(shader, this.gl.COMPILE_STATUS) !== true){
-            console.error(this.gl.getShaderInfoLog(shader));
-            return null;
-        }
-
-        return shader;
-    };*/
+    var attachAtributes = function(shaderProgram){
+        shaderProgram.attachVertexAttrib(this.buffers.vertex);
+        shaderProgram.attachColorAttrib(this.buffers.color);
+        shaderProgram.attachNormalAttrib(this.buffers.normal);
+    };
     
     this.renderScene = function(){
-        this.gl.clearColor(0.0, 0.0, 1.0, 1.0);
         this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
+        
+        this.gl.bindBuffer(this.buffers.index.TYPE, this.buffers.index.buffer);
+        this.gl.drawElements(this.gl.TRIANGLE_STRIP, this.buffers.index.numItems, this.gl.UNSIGNED_SHORT, 0);
+    };
+    
+    this.updateSize = function(width,height){
+        width = width || null;
+        height = height || null;
+        this.gl.canvas.width = width || this.gl.canvas.offsetWidth;
+        this.gl.canvas.height = height || this.gl.canvas.offsetHeight;
+
+        console.log("Set size: width: " + this.gl.drawingBufferWidth 
+                + ", Heigth: " + this.gl.drawingBufferHeight + ".");
     };
     
     __init.call(this,canvas);
@@ -91,8 +116,37 @@ GL.ShaderProgram = function ShaderProgram(conf){
     urls[this.FRAGMENT] = conf.fragment || null;
     
     var gl = conf.gl || null;
-    
+    var shaderProgram = null;
     this.shaders = {};
+    this.onInit = null;
+    
+    this.attachVertexAttrib = function(buffer){
+        var vertexAttribute = gl.getAttribLocation(shaderProgram, "glVertex");
+        gl.enableVertexAttribArray(vertexAttribute);
+        
+        gl.bindBuffer(buffer.TYPE, buffer.buffer);
+        gl.vertexAttribPointer(vertexAttribute, buffer.itemSize, gl.FLOAT, false, 0, 0);
+    };
+    
+    this.attachColorAttrib = function(buffer){
+        var colorAttribute = gl.getAttribLocation(shaderProgram, "glColor");
+        gl.enableVertexAttribArray(colorAttribute);
+        
+        gl.bindBuffer(buffer.TYPE, buffer.buffer);
+        gl.vertexAttribPointer(colorAttribute, buffer.itemSize, gl.FLOAT, false, 0, 0);
+    };
+    
+    this.attachNormalAttrib = function(buffer){
+        var normalAttribute = gl.getAttribLocation(shaderProgram, "glNormal");
+        gl.enableVertexAttribArray(normalAttribute);
+        
+        gl.bindBuffer(buffer.TYPE, buffer.buffer);
+        gl.vertexAttribPointer(normalAttribute, buffer.itemSize, gl.FLOAT, false, 0, 0);
+    };
+    
+    this.useProgram = function(){
+        gl.useProgram(shaderProgram);
+    };
     
     this.getSader = function(type, collback){
         load(type, GL.bind(function(soursCode){
@@ -117,14 +171,24 @@ GL.ShaderProgram = function ShaderProgram(conf){
         },this));
     };
     
-    this.initProgram = function(collback){
+    this.initProgram = function(){
         if (!(this.shaders[this.VERTEX] && this.shaders[this.FRAGMENT])){
             getSaders.call(this,GL.bind(function(){
-                console.log(this);
-                this.initProgram(collback);
+                this.initProgram();
             },this));
             return;
+        };
+        
+        shaderProgram = gl.createProgram();
+        gl.attachShader(shaderProgram, this.shaders[this.VERTEX]);
+        gl.attachShader(shaderProgram, this.shaders[this.FRAGMENT]);
+        gl.linkProgram(shaderProgram);
+        
+        if (gl.getProgramParameter(shaderProgram, gl.LINK_STATUS) !== true) {
+            console.error("Could not initialise shaders");
         }
+        
+        if (typeof this.onInit === "function") this.onInit(this);
     };
     
     var getSaders = function(collback){
@@ -167,9 +231,53 @@ GL.bind = function(fn,obj){
     return function(){ fn.apply(obj,arguments); };
 };
 
+GL.ArrayBuffer = function ArrayBuffer(gl,data){
+    this.TYPE = gl.ARRAY_BUFFER;
+    this.DataConvert = Float32Array;
+    
+    this.buffer = gl.createBuffer();
+    
+    this.itemSize = null;
+    this.numItems = null;
+    
+    this.setData = function(data){
+        this.__proto__.setData.call(this,gl,data);
+    };
+    
+    
+    if (data) this.setData(data);
+};
+
+GL.ElementBuffer = function ElementBuffer(gl,data){
+    this.TYPE = gl.ELEMENT_ARRAY_BUFFER;
+    this.DataConvert = Uint16Array;
+    
+    this.buffer = gl.createBuffer();
+    
+    this.itemSize = null;
+    this.numItems = null;
+    
+    this.setData = function(data){
+        this.__proto__.setData.call(this,gl,data);
+    };
+    
+    
+    if (data) this.setData(data);
+};
+
+GL.Buffer = function Buffer(){
+    this.setData = function(gl,data){
+        gl.bindBuffer(this.TYPE, this.buffer);
+        gl.bufferData(this.TYPE, new this.DataConvert(data.list), gl.STATIC_DRAW);
+        this.itemSize = data.itemSize;
+        this.numItems = data.numItems;
+    };
+};
+
+GL.ArrayBuffer.prototype = GL.ElementBuffer.prototype = new GL.Buffer();
+
 window.onload = function(){
     var c = document.getElementById('gl');
     gl = new GL(c);
-    gl.initShaderProgram();
     //gl.renderScene();
 };
