@@ -18,8 +18,9 @@ function GL(canvas) {
         initBuffers.call(this);
         
         this.shaderProgram = this.initShaderProgram(GL.bind(function(shaderProgram){
-            attachAtributes.call(this,shaderProgram);
             shaderProgram.useProgram();
+            attachAtributes.call(this,shaderProgram);
+            this.renderScene();
         },this));
         
         this.updateSize(400,400);
@@ -59,6 +60,10 @@ function GL(canvas) {
                 1.0, 0.0, 0.0, 1.0,
                 0.0, 1.0, 0.0, 1.0,
                 0.0, 0.0, 1.0, 1.0
+                
+                /*0.8, 0.8, 0.8, 1.0,
+                0.8, 0.8, 0.8, 1.0,
+                0.8, 0.8, 0.8, 1.0,*/
             ]
         });
         
@@ -82,9 +87,12 @@ function GL(canvas) {
     };
     
     var attachAtributes = function(shaderProgram){
-        shaderProgram.attachVertexAttrib(this.buffers.vertex);
-        shaderProgram.attachColorAttrib(this.buffers.color);
-        shaderProgram.attachNormalAttrib(this.buffers.normal);
+        shaderProgram.attachAtribute(this.buffers.vertex, "glVertex");
+        shaderProgram.attachAtribute(this.buffers.color, "glColor");
+        shaderProgram.attachAtribute(this.buffers.normal, "glNormal");
+        
+        shaderProgram.attachUniform([0.0, 0.0, -5.0],"u_camera");
+        shaderProgram.attachUniform([0.0, 0.0, -2.0],"u_lightPosition");
     };
     
     this.renderScene = function(){
@@ -120,28 +128,17 @@ GL.ShaderProgram = function ShaderProgram(conf){
     this.shaders = {};
     this.onInit = null;
     
-    this.attachVertexAttrib = function(buffer){
-        var vertexAttribute = gl.getAttribLocation(shaderProgram, "glVertex");
-        gl.enableVertexAttribArray(vertexAttribute);
+    this.attachAtribute = function(buffer,variable){
+        var vertexVariable = gl.getAttribLocation(shaderProgram,variable);
+        gl.enableVertexAttribArray(vertexVariable);
         
         gl.bindBuffer(buffer.TYPE, buffer.buffer);
-        gl.vertexAttribPointer(vertexAttribute, buffer.itemSize, gl.FLOAT, false, 0, 0);
+        gl.vertexAttribPointer(vertexVariable, buffer.itemSize, gl.FLOAT, false, 0, 0);
     };
     
-    this.attachColorAttrib = function(buffer){
-        var colorAttribute = gl.getAttribLocation(shaderProgram, "glColor");
-        gl.enableVertexAttribArray(colorAttribute);
-        
-        gl.bindBuffer(buffer.TYPE, buffer.buffer);
-        gl.vertexAttribPointer(colorAttribute, buffer.itemSize, gl.FLOAT, false, 0, 0);
-    };
-    
-    this.attachNormalAttrib = function(buffer){
-        var normalAttribute = gl.getAttribLocation(shaderProgram, "glNormal");
-        gl.enableVertexAttribArray(normalAttribute);
-        
-        gl.bindBuffer(buffer.TYPE, buffer.buffer);
-        gl.vertexAttribPointer(normalAttribute, buffer.itemSize, gl.FLOAT, false, 0, 0);
+    this.attachUniform = function(data,variable){
+        var uniformVariable = gl.getUniformLocation(shaderProgram, variable);
+        gl.uniform3fv(uniformVariable,new Float32Array(data));
     };
     
     this.useProgram = function(){
