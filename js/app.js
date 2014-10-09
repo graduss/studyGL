@@ -3,6 +3,9 @@ function GL(canvas) {
     this.shaderProgram = null;
     this.buffers = {};
     
+    this.pMatrix = mat4.create();
+    this.mvMatrix = mat4.create();
+    
     function __init(canvas){
         try{
             this.gl = canvas.getContext('webgl');
@@ -12,10 +15,12 @@ function GL(canvas) {
             console.error('Your brawser con\'t WebGL.');
         }
         
-        this.gl.clearColor(0.7, 0.7, 0.7, 1.0);
+        this.gl.clearColor(0.0, 0.0, 0.0, 1.0);
         this.gl.enable(this.gl.DEPTH_TEST);
         
         initBuffers.call(this);
+        
+        //console.log(initSurface(func,0.01));
         
         this.shaderProgram = this.initShaderProgram(GL.bind(function(shaderProgram){
             shaderProgram.useProgram();
@@ -24,7 +29,13 @@ function GL(canvas) {
         },this));
         
         this.updateSize(400,400);
-        this.gl.viewport(10,10,this.gl.drawingBufferWidth-20, this.gl.drawingBufferHeight-20);
+        this.gl.viewport(0,0,this.gl.drawingBufferWidth, this.gl.drawingBufferHeight);
+        
+        mat4.perspective(this.pMatrix, 45, this.gl.drawingBufferWidth / this.gl.drawingBufferHeight, 0.1, 100.0);
+        
+        mat4.identity(this.mvMatrix);
+        mat4.translate(this.mvMatrix, this.mvMatrix, [0.0, 0.0, -4.0]);
+        mat4.rotate(this.mvMatrix, this.mvMatrix, degToRad(-60), [1, 0.2, 0]);
     }
     
     this.initShaderProgram = function(collback){
@@ -43,60 +54,60 @@ function GL(canvas) {
     };
     
     var initBuffers = function(){
+        var dx = 0.2;
+        var vert = initSurface(func,dx);
         this.buffers.vertex = new GL.ArrayBuffer(this.gl, {
-            numItems  : 3,
+            numItems  : vert.vert.length,
             itemSize : 3,
-            list: [
-                -1.0, -1.0, 0.0,
-                1.0, -1.0, 0.0,
-                0.0, 1.0, 0.0
-            ]
+            list: vert.vert
         });
         
-        this.buffers.color = new GL.ArrayBuffer(this.gl, {
-            numItems: 3,
-            itemSize: 4,
-            list: [
-                1.0, 0.0, 0.0, 1.0,
-                0.0, 1.0, 0.0, 1.0,
-                0.0, 0.0, 1.0, 1.0
-                
-                /*0.8, 0.8, 0.8, 1.0,
-                0.8, 0.8, 0.8, 1.0,
-                0.8, 0.8, 0.8, 1.0,*/
-            ]
-        });
+        var ind = initIndexList(vert.vert,dx);
+        
+//        this.buffers.color = new GL.ArrayBuffer(this.gl, {
+//            numItems: 4,
+//            itemSize: 4,
+//            list: [
+//                1.0, 0.5, 0.0, 1.0,
+//                0.0, 1.0, 0.5, 1.0,
+//                0.0, 0.5, 1.0, 1.0,
+//                0.5, 0.0, 1.0, 1.0
+//                
+//                /*0.8, 0.8, 0.8, 1.0,
+//                0.8, 0.8, 0.8, 1.0,
+//                0.8, 0.8, 0.8, 1.0,*/
+//            ]
+//        });
         
         this.buffers.normal = new GL.ArrayBuffer(this.gl, {
-            numItems: 3,
+            numItems: vert.norm.length,
             itemSize: 3 ,
-            list: [
-                0.0, 0.0, 4.0,
-                0.0, 0.0, 4.0,
-                0.0, 0.0, 4.0
-            ]
+            list: vert.norm
         });
         
         this.buffers.index = new GL.ElementBuffer(this.gl,{
-            numItems  : 3,
+            numItems  : ind.length,
             itemSize : 1,
-            list: [
-                0, 1, 2
-            ]
+            list: ind
         });
     };
     
     var attachAtributes = function(shaderProgram){
         shaderProgram.attachAtribute(this.buffers.vertex, "glVertex");
-        shaderProgram.attachAtribute(this.buffers.color, "glColor");
+        //shaderProgram.attachAtribute(this.buffers.color, "glColor");
         shaderProgram.attachAtribute(this.buffers.normal, "glNormal");
         
-        shaderProgram.attachUniform([0.0, 0.0, -5.0],"u_camera");
-        shaderProgram.attachUniform([0.0, 0.0, -2.0],"u_lightPosition");
+        shaderProgram.attachUniform([0.5, 1.8, -4.0],"u_lightPosition");
+        
+        shaderProgram.initUniMatrix("uPMatrix");
+        shaderProgram.initUniMatrix("uMVMatrix");
     };
     
     this.renderScene = function(){
         this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
+        
+        this.shaderProgram.updateUnMatrix("uPMatrix",this.pMatrix);
+        this.shaderProgram.updateUnMatrix("uMVMatrix",this.mvMatrix);
         
         this.gl.bindBuffer(this.buffers.index.TYPE, this.buffers.index.buffer);
         this.gl.drawElements(this.gl.TRIANGLE_STRIP, this.buffers.index.numItems, this.gl.UNSIGNED_SHORT, 0);
@@ -110,6 +121,82 @@ function GL(canvas) {
 
         console.log("Set size: width: " + this.gl.drawingBufferWidth 
                 + ", Heigth: " + this.gl.drawingBufferHeight + ".");
+    };
+    
+    var initIndexList = function(vertex,dx){
+        var l = vertex.length/3;
+        var xl = Math.ceil(2/dx)+1;
+        var n = 0, step = 1, db = 0;
+        
+        var list = [];
+        
+        while(n < l){
+            db = n+xl;
+            if (db >= l) break;
+            
+            if (db <= l){
+                list.push(n);
+                list.push(db);
+            }
+            
+            if ( ((n+1)%xl === 0)&&(step>0) || (n%xl === 0)&&(step<0)  ){
+                list.push(db);
+                n = db;
+                step *= -1;
+            }else{
+                n += step
+            }
+        }
+        
+        return list;
+//        for (var n = 0; n<l; n++){
+//            list.push(n);
+//            if (n+xl <= l) list.push(n+xl);
+//            
+//            if (n%xl == 0){
+//                list.push(n);
+//            }
+//        }
+    };
+    
+    
+    var initSurface = function(func, dx, dy){
+        dy = dy || dx;
+        var z = 0, _dx, _dy;
+        var vert = [], norm = [];
+        for (var i = -1; i<=1; i+=dx){
+            for (var j = -1; j<=1; j+=dy) {
+                z = func(i,j);
+                vert.push(i);
+                vert.push(j);
+                vert.push(z);
+                
+                norm.push(-funcDx(i,j));
+                norm.push(-funcDy(i,j));
+                norm.push(1);
+            }
+        }
+        
+        return {
+            vert: vert,
+            norm: norm
+        };
+    };
+    
+    var func = function(x,y){
+        return Math.exp(-3 * (x*x + y*y) );
+    };
+    
+    var funcDx = function(x,y){
+        return Math.exp(-3 * (x*x + y*y) )*(2*x + y*y);
+    };
+    
+    var funcDy = function(x,y){
+        return Math.exp(-3 * (x*x + y*y) )*(x*x + 2*y);
+    };
+    
+    function degToRad(degrees) {
+        return degrees * Math.PI / 180;
     };
     
     __init.call(this,canvas);
@@ -127,6 +214,16 @@ GL.ShaderProgram = function ShaderProgram(conf){
     var shaderProgram = null;
     this.shaders = {};
     this.onInit = null;
+    
+    this.matrix = {};
+    
+    this.initUniMatrix = function(variable){
+        this.matrix[variable] = gl.getUniformLocation(shaderProgram, variable);
+    };
+    
+    this.updateUnMatrix = function(variable,data){
+        gl.uniformMatrix4fv(this.matrix[variable],false,data);
+    };
     
     this.attachAtribute = function(buffer,variable){
         var vertexVariable = gl.getAttribLocation(shaderProgram,variable);
